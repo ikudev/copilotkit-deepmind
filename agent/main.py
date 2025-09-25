@@ -3,16 +3,16 @@ This serves our agents through a FastAPI server.
 """
 
 import os
-from dotenv import load_dotenv
-
-load_dotenv()  
-
 from fastapi import FastAPI
 import uvicorn
 from copilotkit.integrations.fastapi import add_fastapi_endpoint
 from copilotkit import CopilotKitSDK, LangGraphAgent
 from posts_generator_agent import post_generation_graph
 from stack_agent import stack_analysis_graph
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 app = FastAPI()
 
@@ -35,7 +35,7 @@ sdk = CopilotKitSDK(
 add_fastapi_endpoint(app, sdk, "/copilotkit")
 
 
-@app.get("/healthz")
+@app.get("/health")
 def health():
     """Health check."""
     return {"status": "ok"}

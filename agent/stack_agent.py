@@ -31,8 +31,8 @@ class StackAgentState(CopilotKitState):
     tool_logs: List[Dict[str, Any]]
     analysis: Dict[str, Any]
     show_cards: bool
-    context : Dict[str, Any]
-    last_user_content : str
+    context: Dict[str, Any]
+    last_user_content: str
 
 
 # -------------------- Structured Output Schema --------------------
@@ -93,7 +93,6 @@ class StructuredStackAnalysis(BaseModel):
     key_root_files: List[KeyRootFileSpec] = Field(default_factory=list)
     how_to_run: Optional[HowToRunSpec] = None
     risks_notes: List[RiskNoteSpec] = Field(default_factory=list)
-
 
 
 # Expose a tool to return the structured stack analysis to the caller
@@ -165,7 +164,8 @@ def _fetch_readme(owner: str, repo: str) -> str:
                 return base64.b64decode(content).decode("utf-8", errors="ignore")
             except Exception:
                 pass
-    contents = _gh_get(f"https://api.github.com/repos/{owner}/{repo}/contents/")
+    contents = _gh_get(
+        f"https://api.github.com/repos/{owner}/{repo}/contents/")
     if contents:
         for item in contents.json():
             name = item.get("name", "").lower()
@@ -282,19 +282,18 @@ async def gather_context_node(state: StackAgentState, config: RunnableConfig):
     # Parse the last user message for a GitHub URL; fall back when absent
     last_user_content = state["messages"][-1].content if state["messages"] else ""
     parsed = _parse_github_url(last_user_content)
-    
+
     if not parsed:
         return Command(
-            goto= "analyze",
-            update = {
+            goto="analyze",
+            update={
                 "analysis": state["analysis"],
                 "context": {},
                 "tool_logs": state["tool_logs"],
                 "show_cards": False,
                 "last_user_content": last_user_content
             }
-        )        
- 
+        )
 
     # 2. Create a log entry for URL extraction
     state["tool_logs"] = state.get("tool_logs", [])
@@ -306,7 +305,6 @@ async def gather_context_node(state: StackAgentState, config: RunnableConfig):
         }
     )
     await copilotkit_emit_state(config, state)
-
 
     owner, repo = parsed
     state["tool_logs"][-1]["status"] = "completed"
@@ -328,7 +326,8 @@ async def gather_context_node(state: StackAgentState, config: RunnableConfig):
     languages = _fetch_languages(owner, repo)
     readme = _fetch_readme(owner, repo)
     root_items = _list_root(owner, repo)
-    manifests = _fetch_manifest_contents(owner, repo, default_branch, root_items)
+    manifests = _fetch_manifest_contents(
+        owner, repo, default_branch, root_items)
 
     # 5. Assemble the gathered context for downstream analysis
     context: Dict[str, Any] = {
@@ -345,8 +344,8 @@ async def gather_context_node(state: StackAgentState, config: RunnableConfig):
     await copilotkit_emit_state(config, state)
 
     return Command(
-        goto= "analyze",
-        update = {
+        goto="analyze",
+        update={
             "analysis": state["analysis"],
             "context": context,
             "tool_logs": state["tool_logs"],
@@ -358,13 +357,14 @@ async def gather_context_node(state: StackAgentState, config: RunnableConfig):
 
 async def analyze_with_gemini_node(state: StackAgentState, config: RunnableConfig):
     # 6. Short-circuit when no context exists and request a valid URL
-    
+
     context = state.get("context", {})
     if not context:
-        state["messages"].append(AIMessage(content= "Please provide a valid GitHub URL"))
+        state["messages"].append(
+            AIMessage(content="Please provide a valid GitHub URL"))
         return Command(
-            goto= "end",
-            update = {
+            goto="end",
+            update={
                 "messages": state["messages"],
                 "show_cards": state["show_cards"],
                 "analysis": state["analysis"]
@@ -374,7 +374,8 @@ async def analyze_with_gemini_node(state: StackAgentState, config: RunnableConfi
     # 7. Begin analysis and emit progress
     state["tool_logs"] = state.get("tool_logs", [])
     state["tool_logs"].append(
-        {"id": str(uuid.uuid4()), "message": "Analyzing stack", "status": "processing"}
+        {"id": str(uuid.uuid4()), "message": "Analyzing stack",
+         "status": "processing"}
     )
     await copilotkit_emit_state(config, state)
 
@@ -427,15 +428,18 @@ async def analyze_with_gemini_node(state: StackAgentState, config: RunnableConfi
     if structured_payload is None:
         # 11. Fall back to schema-coerced structured output if no tool call is returned
         try:
-            structured_model = model.with_structured_output(StructuredStackAnalysis)
+            structured_model = model.with_structured_output(
+                StructuredStackAnalysis)
             structured_response = await structured_model.ainvoke(messages, config)
             if isinstance(structured_response, StructuredStackAnalysis):
-                structured_payload = structured_response.model_dump(exclude_none=True)
+                structured_payload = structured_response.model_dump(
+                    exclude_none=True)
             elif isinstance(structured_response, dict):
                 structured_payload = structured_response
             else:
                 try:
-                    structured_payload = structured_response.dict(exclude_none=True)  # type: ignore[attr-defined]
+                    structured_payload = structured_response.dict(
+                        exclude_none=True)  # type: ignore[attr-defined]
                 except Exception:
                     structured_payload = None
         except Exception:
@@ -445,10 +449,12 @@ async def analyze_with_gemini_node(state: StackAgentState, config: RunnableConfi
     state["tool_logs"][-1]["status"] = "completed"
     await copilotkit_emit_state(config, state)
     messages[-1].content = state["last_user_content"]
-    messages.append(AIMessage(tool_calls=tool_calls, id = tool_msg.id, type = "ai", content= ''))
-    messages.append(ToolMessage(content= "The GitHub Repository has been analyzed", tool_call_id = tool_calls[0]["id"], type = "tool"))
+    messages.append(AIMessage(tool_calls=tool_calls,
+                    id=tool_msg.id, type="ai", content=''))
+    messages.append(ToolMessage(content="The GitHub Repository has been analyzed",
+                    tool_call_id=tool_calls[0]["id"], type="tool"))
     messages[0].content = "Generate a summary of the GitHub Repository. It should be in a concise and strictly textual"
-    
+
     # 13. Generate a user-facing summary referencing the tool call outcome
     client = ChatGoogleGenerativeAI(
         model="gemini-2.5-pro",
@@ -456,18 +462,19 @@ async def analyze_with_gemini_node(state: StackAgentState, config: RunnableConfi
         max_retries=2,
         google_api_key=os.getenv("GOOGLE_API_KEY"),
     )
-    state["tool_logs"].append({"id": str(uuid.uuid4()), "message": "Generating Summary", "status": "processing"})
+    state["tool_logs"].append(
+        {"id": str(uuid.uuid4()), "message": "Generating Summary", "status": "processing"})
     await copilotkit_emit_state(config, state)
     model_response = await client.ainvoke(messages, config)
     state["tool_logs"][-1]["status"] = "completed"
     await copilotkit_emit_state(config, state)
     print(model_response, "model_response")
-   
-    state["messages"].append(AIMessage(content= model_response.content))
+
+    state["messages"].append(AIMessage(content=model_response.content))
     # 14. Return a message containing the analysis
     return Command(
-        goto= "end",
-        update = {
+        goto="end",
+        update={
             "messages": state["messages"],
             "show_cards": True,
             "analysis": state["analysis"]
@@ -481,8 +488,8 @@ async def end_node(state: StackAgentState, config: RunnableConfig):
     state["tool_logs"] = []
     await copilotkit_emit_state(config or RunnableConfig(recursion_limit=25), state)
     return Command(
-        goto= END,
-        update = {
+        goto=END,
+        update={
             "messages": state["messages"],
             "show_cards": state["show_cards"],
             "analysis": state["analysis"]

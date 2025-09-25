@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from prompts import system_prompt, system_prompt_3, system_prompt_4
-load_dotenv()
 from typing import Dict, List, Any
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, END, START
@@ -15,6 +14,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from copilotkit.langgraph import copilotkit_emit_state
 import uuid
 import asyncio
+
+load_dotenv()
+
 
 # Define the agent's runtime state schema for CopilotKit/LangGraph
 class AgentState(CopilotKitState):
@@ -62,7 +64,8 @@ async def chat_node(state: AgentState, config: RunnableConfig):
     if config is None:
         config = RunnableConfig(recursion_limit=25)
     else:
-        config = copilotkit_customize_config(config, emit_messages=True, emit_tool_calls=True)
+        config = copilotkit_customize_config(
+            config, emit_messages=True, emit_tool_calls=True)
     # 4. Generating the response using the model. This returns the response along with the web search queries.
     response = model.models.generate_content(
         model="gemini-2.5-pro",
@@ -72,7 +75,7 @@ async def chat_node(state: AgentState, config: RunnableConfig):
                 role="model",
                 parts=[
                     types.Part(
-                        text= system_prompt_4
+                        text=system_prompt_4
                     )
                 ],
             ),
@@ -86,7 +89,7 @@ async def chat_node(state: AgentState, config: RunnableConfig):
     state["tool_logs"][-1]["status"] = "completed"
     await copilotkit_emit_state(config, state)
     state["response"] = response.text
-    
+
     # 6. Orchestrating the web search queries and updating the tool logs
     for query in response.candidates[0].grounding_metadata.web_search_queries:
         state["tool_logs"].append(
@@ -109,7 +112,7 @@ async def fe_actions_node(state: AgentState, config: RunnableConfig):
             return Command(goto="end_node", update=state)
     except Exception as e:
         print("Moved")
-        
+
     state["tool_logs"].append(
         {
             "id": str(uuid.uuid4()),
@@ -127,7 +130,8 @@ async def fe_actions_node(state: AgentState, config: RunnableConfig):
     )
     await copilotkit_emit_state(config, state)
     response = await model.bind_tools([*state["copilotkit"]["actions"]]).ainvoke(
-        [system_prompt_3.replace("{context}", state["response"]), *state["messages"]],
+        [system_prompt_3.replace(
+            "{context}", state["response"]), *state["messages"]],
         config,
     )
     state["tool_logs"] = []
